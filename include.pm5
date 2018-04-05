@@ -1,0 +1,1 @@
+includedirs { "include", "deps/minhook/include" }
