@@ -6,12 +6,3 @@ project "minhook"
 		"deps/minhook/include/*.h",
 		"deps/minhook/src/*.c", "deps/minhook/src/hde/*.c",
 	}
-
-project "minhook_cpp"
-	language "C++"
-	cppdialect "C++11"
-	kind "StaticLib"
-	files {
-		"include/*.hpp",
-		"src/*.cpp"
-	}

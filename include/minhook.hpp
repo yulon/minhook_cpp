@@ -1,15 +1,10 @@
-#ifndef _RUA_MINHOOK_HPP
-#define _RUA_MINHOOK_HPP
+#ifndef _MINHOOK_HPP
+#define _MINHOOK_HPP
 
 #include <MinHook.h>
 
 #include <mutex>
 #include <cassert>
-
-namespace _minhook_cpp {
-	extern size_t count;
-	extern std::mutex mtx;
-}
 
 template <typename T>
 class minhook {
@@ -54,31 +49,33 @@ class minhook {
 		bool install(T target, T detour) {
 			uninstall();
 
-			_minhook_cpp::mtx.lock();
+			auto &s_ctx = _s_ctx();
 
-			if (!_minhook_cpp::count) {
+			s_ctx.mtx.lock();
+
+			if (!s_ctx.count) {
 				if (MH_Initialize() == MH_ERROR_MEMORY_ALLOC) {
 					return false;
 				}
 			}
 
 			if (MH_CreateHook(reinterpret_cast<LPVOID>(target), reinterpret_cast<LPVOID>(detour), reinterpret_cast<LPVOID *>(&_o)) != MH_OK) {
-				if (!_minhook_cpp::count) {
+				if (!s_ctx.count) {
 					MH_Uninitialize();
 				}
 				return false;
 			}
 
 			if (MH_EnableHook(reinterpret_cast<LPVOID>(target)) != MH_OK) {
-				if (!_minhook_cpp::count) {
+				if (!s_ctx.count) {
 					MH_Uninitialize();
 				}
 				return false;
 			}
 
-			++_minhook_cpp::count;
+			++s_ctx.count;
 
-			_minhook_cpp::mtx.unlock();
+			s_ctx.mtx.unlock();
 
 			_t = target;
 			return true;
@@ -102,16 +99,27 @@ class minhook {
 				_t = nullptr;
 				_o = nullptr;
 
-				_minhook_cpp::mtx.lock();
-				if (!--_minhook_cpp::count) {
+				auto &s_ctx = _s_ctx();
+				s_ctx.mtx.lock();
+				if (!--s_ctx.count) {
 					MH_Uninitialize();
 				}
-				_minhook_cpp::mtx.unlock();
+				s_ctx.mtx.unlock();
 			}
 		}
 
 	private:
 		T _t, _o;
+
+		struct _s_ctx_t {
+			size_t count = 0;
+			std::mutex mtx;
+		};
+
+		inline _s_ctx_t &_s_ctx() {
+			static _s_ctx_t inst;
+			return inst;
+		}
 };
 
 #endif
