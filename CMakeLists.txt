@@ -10,8 +10,8 @@ DepPull(
 )
 file(GLOB_RECURSE minhook_SRC "${DEPPULL_minhook_SOURCE_DIR}/src/*.c")
 add_library(minhook STATIC ${minhook_SRC})
-set(minhook_INCLUDE_DIRS "${DEPPULL_minhook_SOURCE_DIR}/include")
-target_include_directories(minhook INTERFACE ${minhook_INCLUDE_DIRS})
+set(minhook_INCLUDE_DIR "${DEPPULL_minhook_SOURCE_DIR}/include")
+target_include_directories(minhook PUBLIC ${minhook_INCLUDE_DIR})
 set_target_properties(minhook PROPERTIES C_STANDARD 11)
 
 add_library(minhook_cpp INTERFACE IMPORTED)
