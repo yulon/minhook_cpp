@@ -14,7 +14,7 @@ set(minhook_INCLUDE_DIR "${DEPPULL_minhook_SOURCE_DIR}/include")
 target_include_directories(minhook PUBLIC ${minhook_INCLUDE_DIR})
 set_target_properties(minhook PROPERTIES C_STANDARD 11)
 
-add_library(minhook_cpp INTERFACE IMPORTED)
+add_library(minhook_cpp INTERFACE)
 set(minhook_cpp_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(minhook_cpp INTERFACE ${minhook_cpp_INCLUDE_DIR})
 target_link_libraries(minhook_cpp INTERFACE minhook)
