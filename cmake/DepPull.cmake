@@ -34,66 +34,73 @@ file(TO_CMAKE_PATH "${DEPPULL_PATH}" DEPPULL_PATH)
 
 message(STATUS "DepPull: DEPPULL_PATH = ${DEPPULL_PATH}")
 
-function(_DepPull_MakeSrcPaths A_DEP_RELATIVE_PATH A_LIST_RELATIVE_PATH)
-	set(SOURCE_RELATIVE_PATH "${A_DEP_RELATIVE_PATH}/src")
-	set(SOURCE_RELATIVE_PATH "${SOURCE_RELATIVE_PATH}" PARENT_SCOPE)
+function(_DepPull_MakeSrcPaths A_DEP_PREFIX A_SOURCE_PREFIX)
+	set(SOURCE_ROOT_REL "${A_DEP_PREFIX}/src")
+	set(SOURCE_ROOT_REL "${SOURCE_ROOT_REL}" PARENT_SCOPE)
 
-	set(SOURCE_DIR "${DEPPULL_PATH}/${SOURCE_RELATIVE_PATH}")
-	set(SOURCE_DIR "${SOURCE_DIR}" PARENT_SCOPE)
+	set(SOURCE_ROOT "${DEPPULL_PATH}/${SOURCE_ROOT_REL}")
+	set(SOURCE_ROOT "${SOURCE_ROOT}" PARENT_SCOPE)
 
-	file(TO_CMAKE_PATH "${A_LIST_RELATIVE_PATH}" LIST_RELATIVE_PATH)
-	if(LIST_RELATIVE_PATH AND NOT "${A_LIST_RELATIVE_PATH}" STREQUAL "/")
-		set(SOURCE_WITH_LIST_RELATIVE_PATH "${SOURCE_RELATIVE_PATH}/${LIST_RELATIVE_PATH}" PARENT_SCOPE)
-		set(LIST_DIR "${SOURCE_DIR}/${LIST_RELATIVE_PATH}" PARENT_SCOPE)
+	file(TO_CMAKE_PATH "${A_SOURCE_PREFIX}" SOURCE_PREFIX)
+	if(SOURCE_PREFIX AND NOT "${A_SOURCE_PREFIX}" STREQUAL "/")
+		set(SOURCE_DIR_REL "${SOURCE_ROOT_REL}/${SOURCE_PREFIX}" PARENT_SCOPE)
+		set(SOURCE_DIR "${SOURCE_ROOT}/${SOURCE_PREFIX}" PARENT_SCOPE)
 	else()
-		set(SOURCE_WITH_LIST_RELATIVE_PATH "${SOURCE_RELATIVE_PATH}" PARENT_SCOPE)
-		set(LIST_DIR "${SOURCE_DIR}" PARENT_SCOPE)
+		set(SOURCE_DIR_REL "${SOURCE_ROOT_REL}" PARENT_SCOPE)
+		set(SOURCE_DIR "${SOURCE_ROOT}" PARENT_SCOPE)
 	endif()
 endfunction()
 
 function(DepPull A_NAME)
+	message(STATUS "DepPull: Checking '${A_NAME}' ...")
+
 	set(oneValueArgs
 		USE_PACKAGE
 		ARCHIVE_URL
 		ARCHIVE_HASH
 		GIT_REPO
 		GIT_TAG
-		LIST_RELATIVE_PATH
+		SOURCE_PREFIX
+		DEV_SOURCE_DIR
 	)
 	cmake_parse_arguments(A "" "${oneValueArgs}" "" ${ARGN})
-
-	if(A_USE_PACKAGE)
-		find_package(${A_NAME} QUIET)
-		if(${A_NAME}_FOUND)
-			if(DEFINED ${A_NAME}_VERSION)
-				message(STATUS "DepPull: found ${A_NAME}@${${A_NAME}_VERSION}")
-				return()
-			endif()
-			message(STATUS "DepPull: found ${A_NAME}")
-			return()
-		endif()
-	endif()
 
 	set(FOUND FALSE)
 	string(TOLOWER ${A_NAME} NAME_TOLOWER)
 
-	if(ARCHIVE_URL)
-		string(REPLACE "=" "-" DEP_RELATIVE_PATH "${A_ARCHIVE_HASH}")
-		set(DEP_RELATIVE_PATH "${NAME_TOLOWER}/${DEP_RELATIVE_PATH}")
+	if(EXISTS "${A_DEV_SOURCE_DIR}")
+		set(SOURCE_DIR "${A_DEV_SOURCE_DIR}")
+		set(STORAGE_PREFIX "${NAME_TOLOWER}/dev")
+		set(FOUND TRUE)
+	endif()
 
-		_DepPull_MakeSrcPaths("${DEP_RELATIVE_PATH}" "${A_LIST_RELATIVE_PATH}")
+	if(NOT FOUND AND A_USE_PACKAGE)
+		find_package(${A_NAME} QUIET)
+		if(${A_NAME}_FOUND)
+			if(DEFINED ${A_NAME}_VERSION)
+				message(STATUS "DepPull: Found '${A_NAME}@${${A_NAME}_VERSION}'")
+				return()
+			endif()
+			message(STATUS "DepPull: Found '${A_NAME}'")
+			return()
+		endif()
+	endif()
 
-		if(EXISTS "${SOURCE_DIR}.ready")
+	if(NOT FOUND AND ARCHIVE_URL)
+		string(MAKE_C_IDENTIFIER "${A_ARCHIVE_HASH}" ARCHIVE_NAME)
+		set(STORAGE_PREFIX "${NAME_TOLOWER}/${ARCHIVE_NAME}")
+
+		_DepPull_MakeSrcPaths("${STORAGE_PREFIX}" "${A_SOURCE_PREFIX}")
+
+		if(EXISTS "${SOURCE_ROOT}.ready")
 			set(FOUND TRUE)
 		else()
-			message(STATUS "DepPull: getting ${A_ARCHIVE_URL}")
-
-			if(EXISTS "${SOURCE_DIR}")
-				file(REMOVE_RECURSE "${SOURCE_DIR}")
+			if(EXISTS "${SOURCE_ROOT}")
+				file(REMOVE_RECURSE "${SOURCE_ROOT}")
 			endif()
-			file(MAKE_DIRECTORY "${SOURCE_DIR}")
+			file(MAKE_DIRECTORY "${SOURCE_ROOT}")
 
-			set(SOURCE_PKG "${SOURCE_DIR}.unkpkg")
+			set(SOURCE_PKG "${SOURCE_ROOT}.unkpkg")
 
 			if(EXPECTED_HASH)
 				file(DOWNLOAD "${ARCHIVE_URL}" "${SOURCE_PKG}" EXPECTED_HASH ${A_ARCHIVE_HASH})
@@ -104,11 +111,11 @@ function(DepPull A_NAME)
 			execute_process(
 				COMMAND "${CMAKE_COMMAND}" -E tar xzf "${SOURCE_PKG}"
 				RESULT_VARIABLE EXIT_CODE
-				WORKING_DIRECTORY "${SOURCE_DIR}"
+				WORKING_DIRECTORY "${SOURCE_ROOT}"
 				ENCODING NONE
 			)
 			if(EXIT_CODE STREQUAL "0")
-				file(WRITE "${SOURCE_DIR}.ready" "")
+				file(WRITE "${SOURCE_ROOT}.ready" "")
 				set(FOUND TRUE)
 			endif()
 			file(REMOVE "${SOURCE_PKG}")
@@ -121,34 +128,31 @@ function(DepPull A_NAME)
 		string(MAKE_C_IDENTIFIER "${GIT_REPO_CLEAR}" GIT_REPO_NAME)
 
 		if(A_GIT_TAG AND NOT "${A_GIT_TAG}" STREQUAL "*")
-			set(GIT_TAG "${A_GIT_REPO}")
+			set(GIT_TAG "${A_GIT_TAG}")
 		else()
 			set(GIT_TAG "master")
 		endif()
 
-		set(DEP_RELATIVE_PATH "${NAME_TOLOWER}/git-${GIT_REPO_NAME}")
+		set(STORAGE_PREFIX "${NAME_TOLOWER}/${GIT_REPO_NAME}")
 		if(NOT "${GIT_TAG}" STREQUAL "master")
-			set(DEP_RELATIVE_PATH "${DEP_RELATIVE_PATH}-${GIT_TAG}")
+			set(STORAGE_PREFIX "${STORAGE_PREFIX}-${GIT_TAG}")
 		endif()
 
-		_DepPull_MakeSrcPaths("${DEP_RELATIVE_PATH}" "${A_LIST_RELATIVE_PATH}")
+		_DepPull_MakeSrcPaths("${STORAGE_PREFIX}" "${A_SOURCE_PREFIX}")
 
-		if(NOT EXISTS "${SOURCE_DIR}.ready")
+		if(NOT EXISTS "${SOURCE_ROOT}.ready")
 
 			if(NOT DEFINED GIT_EXECUTABLE)
-				find_package(Git REQUIRED)
+				find_package(Git REQUIRED QUIET)
 			endif()
-
-			message(STATUS "DepPull: cloning ${A_GIT_REPO} (${GIT_TAG})")
 
 			if(NOT EXISTS "${DEPPULL_PATH}")
 				file(MAKE_DIRECTORY "${DEPPULL_PATH}")
 			endif()
 
 			execute_process(
-				COMMAND "${GIT_EXECUTABLE}" clone "${A_GIT_REPO}" "${SOURCE_RELATIVE_PATH}"
+				COMMAND "${GIT_EXECUTABLE}" clone "${A_GIT_REPO}" "${SOURCE_ROOT}"
 				RESULT_VARIABLE EXIT_CODE
-				WORKING_DIRECTORY "${DEPPULL_PATH}"
 				ENCODING NONE
 			)
 			if(EXIT_CODE STREQUAL "0")
@@ -156,19 +160,19 @@ function(DepPull A_NAME)
 					execute_process(
 						COMMAND "${GIT_EXECUTABLE}" checkout "${GIT_TAG}"
 						RESULT_VARIABLE EXIT_CODE
-						WORKING_DIRECTORY "${SOURCE_DIR}"
+						WORKING_DIRECTORY "${SOURCE_ROOT}"
 						ENCODING NONE
 					)
 					if(EXIT_CODE STREQUAL "0")
-						if(NOT EXISTS "${SOURCE_DIR}/.gitmodules")
-							file(REMOVE_RECURSE "${SOURCE_DIR}/.git")
+						if(NOT EXISTS "${SOURCE_ROOT}/.gitmodules")
+							file(REMOVE_RECURSE "${SOURCE_ROOT}/.git")
 						endif()
 
-						file(WRITE "${SOURCE_DIR}.ready" "")
+						file(WRITE "${SOURCE_ROOT}.ready" "")
 						set(FOUND TRUE)
 					endif()
 				else()
-					file(WRITE "${SOURCE_DIR}.ready" "")
+					file(WRITE "${SOURCE_ROOT}.ready" "")
 					set(FOUND TRUE)
 				endif()
 			endif()
@@ -180,16 +184,14 @@ function(DepPull A_NAME)
 			endif()
 
 			if(DEFINED GIT_EXECUTABLE)
-				message(STATUS "DepPull: pulling ${SOURCE_WITH_LIST_RELATIVE_PATH}")
-
 				execute_process(
 					COMMAND "${GIT_EXECUTABLE}" pull
 					RESULT_VARIABLE EXIT_CODE
-					WORKING_DIRECTORY "${SOURCE_DIR}"
+					WORKING_DIRECTORY "${SOURCE_ROOT}"
 					ENCODING NONE
 				)
 				if(EXIT_CODE STREQUAL "0")
-					file(WRITE "${SOURCE_DIR}.ready" "")
+					file(WRITE "${SOURCE_ROOT}.ready" "")
 					set(FOUND TRUE)
 				endif()
 			else()
@@ -202,21 +204,21 @@ function(DepPull A_NAME)
 	endif()
 
 	if(NOT FOUND)
-		message(FATAL_ERROR "DepPull: not found ${A_NAME}")
+		message(FATAL_ERROR "DepPull: Not found '${A_NAME}'")
 	endif()
 
-	message(STATUS "DepPull: using ${SOURCE_WITH_LIST_RELATIVE_PATH}")
+	message(STATUS "DepPull: Using '${A_NAME}' at ${SOURCE_DIR}")
 
-	set(BUILD_DIR "${DEPPULL_CURRENT_PATH}/${DEP_RELATIVE_PATH}/build")
-	if(EXISTS "${BUILD_DIR}" AND "${SOURCE_DIR}.ready" IS_NEWER_THAN "${BUILD_DIR}")
+	set(BUILD_DIR "${DEPPULL_CURRENT_PATH}/${STORAGE_PREFIX}/build")
+	if(EXISTS "${BUILD_DIR}" AND "${SOURCE_ROOT}.ready" IS_NEWER_THAN "${BUILD_DIR}")
 		file(REMOVE_RECURSE "${BUILD_DIR}")
 	endif()
 
-	if(EXISTS "${LIST_DIR}/CMakeLists.txt")
-		add_subdirectory("${LIST_DIR}" "${BUILD_DIR}")
+	if(EXISTS "${SOURCE_DIR}/CMakeLists.txt")
+		add_subdirectory("${SOURCE_DIR}" "${BUILD_DIR}")
 	endif()
 
+	set(DEPPULL_${A_NAME}_SOURCE_ROOT "${SOURCE_ROOT}" PARENT_SCOPE)
 	set(DEPPULL_${A_NAME}_SOURCE_DIR "${SOURCE_DIR}" PARENT_SCOPE)
-	set(DEPPULL_${A_NAME}_LIST_DIR "${LIST_DIR}" PARENT_SCOPE)
 	set(DEPPULL_${A_NAME}_BUILD_DIR "${BUILD_DIR}" PARENT_SCOPE)
 endfunction()
