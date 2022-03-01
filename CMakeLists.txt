@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.0)
 
 project(minhook_cpp)
 
-include("cmake/DepPull.cmake")
+include("cmake/depu.cmake")
 
-deppull(
+depu(
 	minhook
 	GIT_REPO "https://github.com/TsudaKageyu/minhook.git"
 )
